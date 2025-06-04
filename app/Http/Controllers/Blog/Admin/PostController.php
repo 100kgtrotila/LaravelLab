@@ -11,7 +11,10 @@ use Illuminate\Support\Str;
 class PostController extends BaseController
 {
     private $blogPostRepository;
-    private $blogCategoryRepository;
+    /**
+     * @var BlogCategoryRepository
+     */
+    private $blogCategoryRepository; // властивість через яку будемо звертатись в репозиторій категорій
 
     public function __construct()
     {
@@ -29,31 +32,32 @@ class PostController extends BaseController
     public function edit($id)
     {
         $item = $this->blogPostRepository->getEdit($id);
-        if (empty($item)) {
+        if (empty($item)) {                         //помилка, якщо репозиторій не знайде наш ід
             abort(404);
         }
         $categoryList = $this->blogCategoryRepository->getForComboBox();
+
         return view('blog.admin.posts.edit', compact('item', 'categoryList'));
     }
 
     public function update(BlogPostUpdateRequest $request, $id)
     {
         $item = $this->blogPostRepository->getEdit($id);
-        if (empty($item)) {
-            return back()
-                ->withErrors(['msg' => "Запис id=[{$id}] не знайдено"])
-                ->withInput();
+        if (empty($item)) { //якщо ід не знайдено
+            return back() //redirect back
+            ->withErrors(['msg' => "Запис id=[{$id}] не знайдено"]) //видати помилку
+            ->withInput(); //повернути дані
         }
 
-        $data = $request->all();
+        $data = $request->all(); //отримаємо масив даних, які надійшли з форми
 
-        if (empty($data['slug'])) {
-            $data['slug'] = Str::slug($data['title']);
+        if (empty($data['slug'])) { //якщо псевдонім порожній
+            $data['slug'] = Str::slug($data['title']); //генеруємо псевдонім
         }
-        if (empty($item->published_at) && $data['is_published']) {
-            $data['published_at'] = Carbon::now();
+        if (empty($item->published_at) && $data['is_published']) { //якщо поле published_at порожнє і нам прийшло 1 в ключі is_published, то
+            $data['published_at'] = Carbon::now(); //генеруємо поточну дату
         }
-        $result = $item->update($data);
+        $result = $item->update($data); //оновлюємо дані об'єкта і зберігаємо в БД
 
         if ($result) {
             return redirect()
