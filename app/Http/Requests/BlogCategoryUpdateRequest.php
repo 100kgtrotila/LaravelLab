@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class BlogPostUpdateRequest extends FormRequest
+class BlogCategoryUpdateRequest extends FormRequest  // ✅ ПРАВИЛЬНО!
 {
     public function authorize()
     {
@@ -16,9 +16,8 @@ class BlogPostUpdateRequest extends FormRequest
         return [
             'title' => 'required|min:5|max:200',
             'slug' => 'max:200',
-            'excerpt' => 'max:500',
-            'content_raw' => 'required|string|min:5|max:10000',
-            'category_id' => 'required|integer|exists:blog_categories,id',
+            'parent_id' => 'nullable|integer|exists:blog_categories,id',
+            'description' => 'nullable|string|max:500',
         ];
     }
 }
