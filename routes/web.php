@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RestTestController;
+use App\Http\Controllers\DiggingDeeperController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -44,4 +45,8 @@ Route::group($groupData, function () {
     Route::resource('posts', PostController::class)
         ->except(['show'])
         ->names('blog.admin.posts');
+});
+Route::group(['prefix' => 'digging_deeper'], function () {
+    Route::get('collections', [DiggingDeeperController::class, 'collections'])
+        ->name('digging_deeper.collections');
 });
