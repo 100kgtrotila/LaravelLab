@@ -11,7 +11,7 @@ use App\Models\BlogCategory;
 class BlogPost extends Model
 {
     use HasFactory, SoftDeletes;
-
+    const UNKNOWN_USER = 1;
     protected $fillable
         = [
             'title',
