@@ -17,26 +17,22 @@ Route::middleware([
         return view('dashboard');
     })->name('dashboard');
 });
+
 Route::resource('rest', RestTestController::class)->names('restTest');
+
 Route::group(['namespace' => 'App\Http\Controllers\Blog', 'prefix' => 'blog'], function () {
     Route::resource('posts', PostController::class)->names('blog.posts');
 });
+
 //Адмінка
 $groupData = [
     'namespace' => 'App\Http\Controllers\Blog\Admin',
     'prefix' => 'admin/blog',
 ];
+
 Route::group($groupData, function () {
     //BlogCategory
-    $methods = ['index','edit','store','update','create',];
-    Route::resource('categories', CategoryController::class)
-        ->only($methods)
-        ->names('blog.admin.categories');
-});
-//BlogPost
-Route::group($groupData, function () {
-    //BlogCategory
-    $methods = ['index','edit','store','update','create'];
+    $methods = ['index','edit','store','update','create','destroy'];
     Route::resource('categories', CategoryController::class)
         ->only($methods)
         ->names('blog.admin.categories');
@@ -46,6 +42,7 @@ Route::group($groupData, function () {
         ->except(['show'])
         ->names('blog.admin.posts');
 });
+
 Route::group(['prefix' => 'digging_deeper'], function () {
     Route::get('collections', [DiggingDeeperController::class, 'collections'])
         ->name('digging_deeper.collections');
