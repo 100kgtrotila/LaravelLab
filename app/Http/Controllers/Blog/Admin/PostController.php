@@ -9,6 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Str;
 use App\Models\BlogPost;
 use App\Http\Requests\BlogPostCreateRequest;
+use App\Jobs\BlogPostAfterCreateJob;
+use App\Jobs\BlogPostAfterDeleteJob;
 
 class PostController extends BaseController
 {
@@ -57,6 +59,9 @@ class PostController extends BaseController
         $item = (new BlogPost())->create($data); //створюємо об'єкт і додаємо в БД
 
         if ($item) {
+            // Використовуємо статичний метод dispatch замість $this->dispatch
+            BlogPostAfterCreateJob::dispatch($item);
+
             return redirect()
                 ->route('blog.admin.posts.edit', [$item->id])
                 ->with(['success' => 'Успішно збережено']);
@@ -70,21 +75,21 @@ class PostController extends BaseController
     public function update(BlogPostUpdateRequest $request, $id)
     {
         $item = $this->blogPostRepository->getEdit($id);
-        if (empty($item)) { //якщо ід не знайдено
-            return back() //redirect back
-            ->withErrors(['msg' => "Запис id=[{$id}] не знайдено"]) //видати помилку
-            ->withInput(); //повернути дані
+        if (empty($item)) {
+            return back()
+            ->withErrors(['msg' => "Запис id=[{$id}] не знайдено"])
+            ->withInput();
         }
 
-        $data = $request->all(); //отримаємо масив даних, які надійшли з форми
+        $data = $request->all();
 
-        if (empty($data['slug'])) { //якщо псевдонім порожній
-            $data['slug'] = Str::slug($data['title']); //генеруємо псевдонім
+        if (empty($data['slug'])) {
+            $data['slug'] = Str::slug($data['title']);
         }
-        if (empty($item->published_at) && $data['is_published']) { //якщо поле published_at порожнє і нам прийшло 1 в ключі is_published, то
-            $data['published_at'] = Carbon::now(); //генеруємо поточну дату
+        if (empty($item->published_at) && $data['is_published']) {
+            $data['published_at'] = Carbon::now();
         }
-        $result = $item->update($data); //оновлюємо дані об'єкта і зберігаємо в БД
+        $result = $item->update($data);
 
         if ($result) {
             return redirect()
@@ -104,6 +109,7 @@ class PostController extends BaseController
         //$result = BlogPost::find($id)->forceDelete(); //повне видалення з БД
 
         if ($result) {
+            BlogPostAfterDeleteJob::dispatch($id)->delay(20);
             return redirect()
                 ->route('blog.admin.posts.index')
                 ->with(['success' => "Запис id[$id] видалено"]);
@@ -112,6 +118,4 @@ class PostController extends BaseController
                 ->withErrors(['msg' => 'Помилка видалення']);
         }
     }
-
-
 }
