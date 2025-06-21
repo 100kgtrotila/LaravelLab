@@ -11,18 +11,29 @@ use App\Models\BlogCategory;
 class BlogPost extends Model
 {
     use HasFactory, SoftDeletes;
+
     const UNKNOWN_USER = 1;
-    protected $fillable
-        = [
-            'title',
-            'slug',
-            'category_id',
-            'excerpt',
-            'content_raw',
-            'is_published',
-            'published_at',
-            'user_id',
-        ];
+
+    protected $fillable = [
+        'title',
+        'slug',
+        'category_id',
+        'excerpt',
+        'content_raw',
+        'is_published',
+        'published_at',
+        'user_id',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_published' => 'boolean',
+        'published_at' => 'datetime', // <--- ВАЖЛИВО! Цей рядок автоматично конвертує дату в потрібний формат.
+    ];
 
     /**
      * Категорія статті
@@ -31,7 +42,6 @@ class BlogPost extends Model
      */
     public function category()
     {
-        //стаття належить категорії
         return $this->belongsTo(BlogCategory::class);
     }
 
@@ -42,7 +52,6 @@ class BlogPost extends Model
      */
     public function user()
     {
-        //стаття належить користувачу
         return $this->belongsTo(User::class);
     }
 }

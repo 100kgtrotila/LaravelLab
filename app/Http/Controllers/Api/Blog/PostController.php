@@ -5,17 +5,16 @@ namespace App\Http\Controllers\Api\Blog;
 use App\Http\Controllers\Controller;
 use App\Models\BlogPost;
 use Illuminate\Http\Request;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
 class PostController extends Controller
 {
     /**
-     * Метод для отримання списку блог-постів для API.
-     *
-     * @return JsonResponse
+     * Display a paginated list of blog posts.
      */
     public function index(Request $request): JsonResponse
     {
@@ -65,10 +64,57 @@ class PostController extends Controller
     }
 
     /**
-     * Display the specified resource by slug.
-     *
-     * @param  string  $slug
-     * @return JsonResponse
+     * Store a newly created blog post in storage.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $validatedData = $request->validate([
+                'title' => 'required|string|max:255',
+                'slug' => 'nullable|string|max:255|unique:blog_posts,slug',
+                'category_id' => 'required|integer|exists:blog_categories,id',
+                'excerpt' => 'nullable|string|max:500',
+                'content_raw' => 'required|string',
+                'is_published' => 'required|boolean',
+                'published_at' => 'nullable|date',
+            ]);
+
+            // Якщо slug не надано, генеруємо його з назви
+            if (empty($validatedData['slug'])) {
+                $validatedData['slug'] = Str::slug($validatedData['title']);
+            }
+            // Перевіряємо унікальність slug і додаємо суфікс, якщо потрібно
+            $originalSlug = $validatedData['slug'];
+            $counter = 1;
+            while (BlogPost::where('slug', $validatedData['slug'])->exists()) {
+                $validatedData['slug'] = $originalSlug . '-' . $counter;
+                $counter++;
+            }
+
+            // Встановлюємо дату публікації, якщо пост публікується
+            if ($validatedData['is_published'] && empty($validatedData['published_at'])) {
+                $validatedData['published_at'] = now();
+            } elseif (!$validatedData['is_published']) {
+                $validatedData['published_at'] = null;
+            }
+
+            // Встановлюємо ID користувача
+            $validatedData['user_id'] = BlogPost::UNKNOWN_USER;
+
+            $post = BlogPost::create($validatedData);
+
+            return response()->json($post->load(['user:id,name', 'category:id,title,slug']), 201);
+
+        } catch (ValidationException $e) {
+            return response()->json(['message' => 'Validation failed.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in PostController@store: ' . $e->getMessage());
+            return response()->json(['message' => 'An error occurred on the server.', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Display the specified blog post by slug.
      */
     public function show(string $slug): JsonResponse
     {
@@ -77,166 +123,65 @@ class PostController extends Controller
                 ->with(['user:id,name', 'category:id,title,slug'])
                 ->firstOrFail();
 
-            return response()->json([
-                'id' => $post->id,
-                'title' => $post->title,
-                'slug' => $post->slug,
-                'excerpt' => $post->excerpt,
-                'content_raw' => $post->content_raw,
-                'is_published' => $post->is_published,
-                'published_at' => $post->published_at,
-                'user' => [
-                    'id' => $post->user->id,
-                    'name' => $post->user->name
-                ],
-                'category' => [
-                    'id' => $post->category->id,
-                    'title' => $post->category->title,
-                    'slug' => $post->category->slug
-                ],
-                'created_at' => $post->created_at,
-                'updated_at' => $post->updated_at,
-            ]);
+            return response()->json($post);
 
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'message' => 'Post not found.',
-                'error' => 'Пост з таким slug не знайдено'
-            ], 404);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Post not found.'], 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'An error occurred.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Створити новий пост
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function store(Request $request): JsonResponse
-    {
-        try {
-            $validated = $request->validate([
-                'title' => 'required|string|max:255',
-                'slug' => 'nullable|string|max:255|unique:blog_posts',
-                'category_id' => 'required|exists:blog_categories,id',
-                'excerpt' => 'nullable|string|max:500',
-                'content_raw' => 'required|string',
-                'is_published' => 'boolean',
-                'published_at' => 'nullable|date',
-            ]);
-
-            // Автоматично генеруємо slug якщо не вказано
-            if (empty($validated['slug'])) {
-                $validated['slug'] = Str::slug($validated['title']);
-            }
-
-            // Встановлюємо користувача (поки що константа, пізніше auth)
-            $validated['user_id'] = BlogPost::UNKNOWN_USER;
-
-            // Якщо публікуємо, але не вказана дата - ставимо поточну
-            if ($validated['is_published'] && empty($validated['published_at'])) {
-                $validated['published_at'] = now();
-            }
-
-            $post = BlogPost::create($validated);
-            $post->load(['user:id,name', 'category:id,title,slug']);
-
-            return response()->json([
-                'id' => $post->id,
-                'title' => $post->title,
-                'slug' => $post->slug,
-                'excerpt' => $post->excerpt,
-                'content_raw' => $post->content_raw,
-                'is_published' => $post->is_published,
-                'published_at' => $post->published_at,
-                'user' => [
-                    'id' => $post->user->id,
-                    'name' => $post->user->name
-                ],
-                'category' => [
-                    'id' => $post->category->id,
-                    'title' => $post->category->title,
-                    'slug' => $post->category->slug
-                ],
-                'created_at' => $post->created_at,
-                'updated_at' => $post->updated_at,
-            ], 201);
-        } catch (\Exception $e) {
+            Log::error("Error in PostController@show for slug {$slug}: " . $e->getMessage());
             return response()->json(['message' => 'An error occurred.', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Оновити пост
-     *
-     * @param Request $request
-     * @param BlogPost $post
-     * @return JsonResponse
+     * Update the specified blog post in storage.
      */
     public function update(Request $request, BlogPost $post): JsonResponse
     {
         try {
-            $validated = $request->validate([
+            $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
+                // Правило унікальності для slug, що ігнорує поточний пост
                 'slug' => 'required|string|max:255|unique:blog_posts,slug,' . $post->id,
-                'category_id' => 'required|exists:blog_categories,id',
+                'category_id' => 'required|integer|exists:blog_categories,id',
                 'excerpt' => 'nullable|string|max:500',
                 'content_raw' => 'required|string',
-                'is_published' => 'boolean',
+                'is_published' => 'required|boolean',
                 'published_at' => 'nullable|date',
             ]);
 
-            // Якщо публікуємо, але не вказана дата - ставимо поточну
-            if ($validated['is_published'] && empty($validated['published_at'])) {
-                $validated['published_at'] = now();
+            // Оновлюємо дату публікації за аналогією з методом store
+            if ($validatedData['is_published'] && empty($validatedData['published_at'])) {
+                // Якщо пост опубліковано, але дата не встановлена, ставимо поточну
+                $validatedData['published_at'] = now();
+            } elseif (!$validatedData['is_published']) {
+                // Якщо пост знято з публікації, обнуляємо дату
+                $validatedData['published_at'] = null;
             }
 
-            $post->update($validated);
-            $post->load(['user:id,name', 'category:id,title,slug']);
+            $post->update($validatedData);
 
-            return response()->json([
-                'id' => $post->id,
-                'title' => $post->title,
-                'slug' => $post->slug,
-                'excerpt' => $post->excerpt,
-                'content_raw' => $post->content_raw,
-                'is_published' => $post->is_published,
-                'published_at' => $post->published_at,
-                'user' => [
-                    'id' => $post->user->id,
-                    'name' => $post->user->name
-                ],
-                'category' => [
-                    'id' => $post->category->id,
-                    'title' => $post->category->title,
-                    'slug' => $post->category->slug
-                ],
-                'created_at' => $post->created_at,
-                'updated_at' => $post->updated_at,
-            ]);
+            return response()->json($post->load(['user:id,name', 'category:id,title,slug']));
+
+        } catch (ValidationException $e) {
+            return response()->json(['message' => 'Validation failed.', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'An error occurred.', 'error' => $e->getMessage()], 500);
+            Log::error("Error in PostController@update for post ID {$post->id}: " . $e->getMessage());
+            return response()->json(['message' => 'An error occurred on the server.', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Видалити пост
-     *
-     * @param BlogPost $post
-     * @return JsonResponse
+     * Remove the specified blog post from storage.
      */
     public function destroy(BlogPost $post): JsonResponse
     {
         try {
-            $post->delete();
-            return response()->json(['message' => 'Post deleted successfully']);
+            $post->delete(); // Виконує soft delete завдяки трейту в моделі
+            return response()->json(['message' => 'Post moved to trash successfully.']);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'An error occurred.', 'error' => $e->getMessage()], 500);
+            Log::error("Error in PostController@destroy for post ID {$post->id}: " . $e->getMessage());
+            return response()->json(['message' => 'An error occurred while deleting the post.'], 500);
         }
     }
 }

@@ -16,4 +16,9 @@ Route::prefix('blog')->group(function () {
 
     // Додаткові роути
     Route::get('categories/{slug}/posts', [CategoryController::class, 'posts']);
+    Route::get('categories-all', [CategoryController::class, 'all']); // Для селектів
+    Route::get('categories/{slug}/posts', [CategoryController::class, 'posts']); // Пости категорії
+
+    // Categories - основні CRUD маршрути
+    Route::apiResource('categories', CategoryController::class);
 });

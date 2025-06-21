@@ -39,12 +39,21 @@ class BlogCategory extends Model
      */
     public function getParentTitleAttribute()
     {
-        $title = $this->parentCategory->title
-            ?? ($this->isRoot()
-                ? 'Корінь'
-                : '???');
+        // Виправляємо аксесор, щоб він не падав
+        if ($this->parentCategory) {
+            return $this->parentCategory->title;
+        }
 
-        return $title;
+        if ($this->isRoot()) {
+            return 'Корінь';
+        }
+
+        return null; // Повертаємо null замість '???'
+    }
+
+    public function posts()
+    {
+        return $this->hasMany(BlogPost::class, 'category_id');
     }
 
     /**
